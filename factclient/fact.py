@@ -26,6 +26,7 @@ class Fact:
     _trace = tracepb.Trace()
     _provider = None
     start_time = 0
+    base = None
 
     PHASE = ["provisioned", "start", "update", "done"]
 
@@ -68,7 +69,6 @@ class Fact:
         timestamp = Timestamp()
         timestamp.FromDatetime(now)
         if "inlcudeEnvironment" in configuration and configuration["inlcudeEnvironment"]:
-            print("all in now")
             trace.Env.update(os.environ)
         trace.BootTime.CopyFrom(timestamp)
         trace.ContainerID = str(Fact._ContainerID)
@@ -78,6 +78,7 @@ class Fact:
             Fact.load(None)
             if "send_on_update" in configuration and configuration["send_on_update"]:
                 Fact.send("provisioned")
+        Fact.base = trace
 
     @staticmethod
     def send(phase):
@@ -101,8 +102,11 @@ class Fact:
 
     @staticmethod
     def start(context, event):
-
+        trace = tracepb.Trace()
+        trace.MergeFrom(Fact.base)
+        Fact._trace = trace
         Fact._trace.StartTime.CopyFrom(Fact.now())
+        trace.ID = str(uuid.uuid4())
         if Fact._provider is None:
             Fact.load(context)
         assert Fact._provider is not None
@@ -118,8 +122,8 @@ class Fact:
 
         assert Fact._provider is not None
         assert Fact.config["io"].connected
-
-        Fact._trace.Logs[datetime.now().timestamp() * 1000] = message
+        key = int(datetime.now().timestamp() * 1000)
+        Fact._trace.Logs[key] = message
         Fact._trace.Logs.update(tags)
 
         if Fact._provider is Provider.AWS:
@@ -134,8 +138,9 @@ class Fact:
         assert Fact.config["io"].connected
 
         Fact._trace.EndTime.CopyFrom(Fact.now())
-        Fact._trace.Logs[datetime.now().timestamp() * 1000] = message
-        Fact._trace.Args.update(args)
+        key = int(datetime.now().timestamp() * 1000)
+        Fact._trace.Logs[key] = message
+        Fact._trace.Args.extend(args)
         duration = Duration()
         exec_time = Fact._trace.EndTime.seconds - Fact._trace.StartTime.seconds
         duration.FromSeconds(exec_time)
