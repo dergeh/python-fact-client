@@ -2,11 +2,12 @@ from datetime import datetime
 from google.protobuf.timestamp_pb2 import Timestamp
 from google.protobuf.duration_pb2 import Duration
 from enum import Enum
-import trace_pb2 as tracepb
+
+from factclient.provider import AWSFact
+from factclient.trace_pb2 import Trace
 import uuid
 import os
 import sys
-from provider.AWSFact import AWSFact
 
 
 class Provider(Enum):
@@ -23,7 +24,7 @@ class Fact:
     _ContainerID = uuid.uuid4()
     _RuntimeString = "{} {} Python {}".format(os.uname()[0], os.uname()[2], sys.version.split(' ')[0])
     config = {}
-    _trace = tracepb.Trace()
+    _trace = Trace()
     _provider = None
     start_time = 0
     base = None
@@ -32,7 +33,9 @@ class Fact:
 
     @staticmethod
     def readFile(path):
-        return
+        with open(path, 'r') as file:
+            data = file.read()
+        return data
 
     @staticmethod
     def fingerprint(trace, context):
@@ -42,7 +45,7 @@ class Fact:
         acf_key = os.getenv("WEBSITE_HOSTNAME")
 
         if aws_key:
-            AWSFact.get_instances().init(trace, context)
+            AWSFact.AWSFact().init(trace, context)
             Fact._provider = Provider.AWS
         elif gcf_key:
             Fact._provider = Provider.GCF
@@ -62,7 +65,7 @@ class Fact:
     @staticmethod
     def boot(configuration):
         Fact.config = configuration
-        trace = tracepb.Trace()
+        trace = Trace()
         Fact._trace = trace
         now = datetime.now()
         print()
@@ -102,7 +105,7 @@ class Fact:
 
     @staticmethod
     def start(context, event):
-        trace = tracepb.Trace()
+        trace = Trace()
         trace.MergeFrom(Fact.base)
         Fact._trace = trace
         Fact._trace.StartTime.CopyFrom(Fact.now())
@@ -112,7 +115,7 @@ class Fact:
         assert Fact._provider is not None
 
         if Fact._provider is Provider.AWS:
-            AWSFact.getInstances().collect(Fact._trace, context)
+            AWSFact.AWSFact().collect(Fact._trace, context)
 
         if "send_on_update" in Fact.config and Fact.config["send_on_update"]:
             Fact.send("start")
@@ -127,7 +130,7 @@ class Fact:
         Fact._trace.Logs.update(tags)
 
         if Fact._provider is Provider.AWS:
-            AWSFact.getInstances().collect(Fact._trace, context)
+            AWSFact.AWSFact().collect(Fact._trace, context)
 
         if "send_on_update" in Fact.config and Fact.config["send_on_update"]:
             Fact.send("update")
@@ -147,7 +150,7 @@ class Fact:
         Fact._trace.ExecutionLatency.CopyFrom(duration)
 
         if Fact._provider is Provider.AWS:
-            AWSFact.getInstances().collect(Fact._trace, context)
+            AWSFact.AWSFact().collect(Fact._trace, context)
 
         if "send_on_update" in Fact.config and Fact.config["send_on_update"]:
             Fact.send("done")

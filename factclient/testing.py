@@ -1,6 +1,4 @@
-from fact import Fact
-from datetime import datetime
-import trace_pb2
+from factclient.fact import Fact
 
 from  factclient.io.TCPSender import TCPSender
 

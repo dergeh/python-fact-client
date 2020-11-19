@@ -1,17 +1,14 @@
-import sys
 import os
-sys.path.insert(0, os.path.abspath('..'))
 
-
-import trace_pb2 as trace
+from factclient.fact import Fact
+import factclient.trace_pb2 as trace
 
 from datetime import datetime
 
 
+class AWSFact(object):
 
-class AWSFact:
-
-    def __init__(self, path):
+    def __init__(self, path="/proc/self/cgroup"):
         self.PATH = path
 
     AWS_LAMBDA_COST = {128: 0.0000002083, 512: 0.0000008333, 1024: 0.0000016667, 1536: 0.0000025000, 2048: 0.0000033333,
@@ -19,7 +16,8 @@ class AWSFact:
 
     PATH = ""
 
-    def get_closes(self, mb):
+    def get_closes(self, str_mb):
+        mb = int(str_mb)
         if mb <= 128:
             return self.AWS_LAMBDA_COST[128]
         elif mb <= 512:
@@ -31,21 +29,14 @@ class AWSFact:
         else:
             return self.AWS_LAMBDA_COST[3008]
 
-    @staticmethod
-    def get_instances(self, path=None):
-        if path is None:
-            return AWSFact("/proc/self/cgroup")
-        else:
-            return AWSFact(path)
-
     def collect(self, trace: trace.Trace, context):
         if context is None:
             raise Exception
-        trace.Memory = context.memory_limit_in_mb
+        trace.Memory = int(context.memory_limit_in_mb)
         trace.Tags["fname"] = context.function_name
         trace.Tags["fver"] = context.function_version
         trace.Tags["rid"] = context.aws_request_id
-        trace.Logs[str(datetime.now().timestamp() * 1000)] = "RemainingTime {}".format(
+        trace.Logs[int(datetime.now().timestamp() * 1000)] = "RemainingTime {}".format(
             context.get_remaining_time_in_millis())
         if context.client_context is not None:
             if "inlcudeEnvironment" in Fact.config and Fact.config["inlcudeEnvironment"]:
@@ -83,9 +74,9 @@ class AWSFact:
     def init(self, trace, context=None):
         log_name = os.environ.get("AWS_LAMBDA_LOG_STREAM_NAME")
         trace.Platform = 'AWS'
-        trace.ContainerId = log_name
+        trace.ContainerID = log_name
         trace.Region = os.environ.get("AWS_REGION")
-        uptime = Fact.readFile("/proc/uptime").trim()
+        uptime = Fact.readFile("/proc/uptime").strip()
         trace.Tags["uptime"] = uptime
         try:
             self.read_cgroup_ids(trace)
