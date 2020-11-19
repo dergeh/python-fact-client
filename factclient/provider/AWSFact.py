@@ -2,7 +2,7 @@ import sys
 import os
 sys.path.insert(0, os.path.abspath('..'))
 
-import fact
+
 import trace_pb2 as trace
 
 from datetime import datetime

@@ -1,5 +1,4 @@
 import socket
-import struct
 from datetime import datetime
 
 
@@ -21,6 +20,5 @@ class TCPSender:
             trace.Logs[key] = message
             ser_trace = trace.SerializeToString()
             print("address: {} port: {}".format(self.address,self.port))
-            #print("this, i'm sending: {}".format(ser_trace))
             s.sendall(ser_trace)
             s.close()
