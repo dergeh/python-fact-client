@@ -10,7 +10,7 @@ class TCPSender:
     def connect(self, env):
         self.address = env["fact_tcp_address"]
         if "fact_tcp_port" in env:
-            self.port = env["fact_tcp_port"]
+            self.port = int(env["fact_tcp_port"])
         self.connected = True
 
     def send(self, message, trace):
