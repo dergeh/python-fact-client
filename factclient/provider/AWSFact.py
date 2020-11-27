@@ -11,11 +11,13 @@ class AWSFact(object):
     def __init__(self, path="/proc/self/cgroup"):
         self.PATH = path
 
+    # cost in euro/millisecond
     AWS_LAMBDA_COST = {128: 0.0000002083, 512: 0.0000008333, 1024: 0.0000016667, 1536: 0.0000025000, 2048: 0.0000033333,
                        3008: 0.0000048958}
 
     PATH = ""
 
+    # selects closest mem config to estimate costs
     def get_closes(self, str_mb):
         mb = int(str_mb)
         if mb <= 128:
@@ -32,6 +34,8 @@ class AWSFact(object):
     def collect(self, trace: trace.Trace, context):
         if context is None:
             raise Exception
+
+        # collect info from lambda context object
         trace.Memory = int(context.memory_limit_in_mb)
         trace.Tags["fname"] = context.function_name
         trace.Tags["fver"] = context.function_version
@@ -42,7 +46,11 @@ class AWSFact(object):
             if "inlcudeEnvironment" in Fact.config and Fact.config["inlcudeEnvironment"]:
                 trace.Env.update(context.client_context.env)
                 trace.Env.update(context.client_context.custom)
+
+        # execution time estimate
         elat = (datetime.now().timestamp() * 1000 - Fact.start_time) // 100
+
+        # cost estimate
         cost = elat * self.get_closes(context.memory_limit_in_mb)
         trace.Cost = cost
 
@@ -86,5 +94,5 @@ class AWSFact(object):
             trace.putTags("service", "undefined")
             trace.putTags("sandbox", "undefined")
             trace.putTags("freezer", "undefined")
-        if context != None:
+        if context is not None:
             self.collect(trace, context)

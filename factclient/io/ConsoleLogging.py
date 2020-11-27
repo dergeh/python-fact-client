@@ -1,6 +1,7 @@
 from datetime import datetime
 
 
+# simple console logging module
 class ConsoleLogging:
     connected = True
 

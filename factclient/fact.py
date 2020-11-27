@@ -21,7 +21,7 @@ class Provider(Enum):
 
 
 class Fact:
-    _ContainerID = uuid.uuid4()
+    _ContainerID = uuid.uuid4()  # random generated container ID
     _RuntimeString = "{} {} Python {}".format(os.uname()[0], os.uname()[2], sys.version.split(' ')[0])
     config = {}
     _trace = Trace()
@@ -29,6 +29,7 @@ class Fact:
     start_time = 0
     base = None
 
+    # definition of function states
     PHASE = ["provisioned", "start", "update", "done"]
 
     @staticmethod
@@ -39,6 +40,7 @@ class Fact:
 
     @staticmethod
     def fingerprint(trace, context):
+        # selects provider based on env variables
         aws_key = os.getenv("AWS_LAMBDA_LOG_STREAM_NAME")
         gcf_key = os.getenv("X_GOOGLE_FUNCTION_NAME")
         ow_key = os.getenv("__OW_ACTION_NAME")
@@ -48,15 +50,19 @@ class Fact:
             AWSFact.AWSFact().init(trace, context)
             Fact._provider = Provider.AWS
         elif gcf_key:
+            # TODO impelent GCF provider
             Fact._provider = Provider.GCF
         elif acf_key:
+            # TODO impelent ACF provider
             Fact._provider = Provider.ACF
         elif ow_key:
             if os.path.isfile("/sys/hypervisor/uuid"):
+                # TODO impelent ICF provider
                 Fact._provider = Provider.ICF
             else:
+                # TODO impelent OWk provider
                 Fact._provider = Provider.OWk
-
+        # default case provider unknown
         else:
             Fact._provider = Provider.UND
 
@@ -64,29 +70,36 @@ class Fact:
 
     @staticmethod
     def boot(configuration):
+
         Fact.config = configuration
+
+        # create new trace
         trace = Trace()
         Fact._trace = trace
-        now = datetime.now()
-        print()
-        timestamp = Timestamp()
-        timestamp.FromDatetime(now)
+
+        trace.BootTime.CopyFrom(Fact.now())
+
         if "inlcudeEnvironment" in configuration and configuration["inlcudeEnvironment"]:
             trace.Env.update(os.environ)
-        trace.BootTime.CopyFrom(timestamp)
+
         trace.ContainerID = str(Fact._ContainerID)
         trace.Runtime = Fact._RuntimeString
         trace.Timestamp.CopyFrom(Fact._trace.BootTime)
+
         if "lazy_loading" not in configuration or not configuration["lazy_loading"]:
             Fact.load(None)
             if "send_on_update" in configuration and configuration["send_on_update"]:
                 Fact.send("provisioned")
+
+        # set trace as base for easier trace generation
         Fact.base = trace
 
     @staticmethod
     def send(phase):
+        # check if function phase is valid
         if phase not in Fact.PHASE:
             raise ValueError("{} is not a defined phase".format(phase))
+
         try:
             Fact.config["io"].send(phase, Fact._trace)
         except IOError as e:
@@ -94,22 +107,26 @@ class Fact:
 
     @staticmethod
     def now():
+        # timestamp shenanigans
         timestamp = Timestamp()
         timestamp.FromDatetime(datetime.now())
         return timestamp
 
     @staticmethod
     def load(context):
+        # set provider and init trace
         Fact.fingerprint(Fact._trace, context)
+
+        # connect to io module
         Fact.config["io"].connect(os.environ)
 
     @staticmethod
     def start(context, event):
         trace = Trace()
         trace.MergeFrom(Fact.base)
+        trace.ID = str(uuid.uuid4())
         Fact._trace = trace
         Fact._trace.StartTime.CopyFrom(Fact.now())
-        trace.ID = str(uuid.uuid4())
         if Fact._provider is None:
             Fact.load(context)
         assert Fact._provider is not None
@@ -141,9 +158,14 @@ class Fact:
         assert Fact.config["io"].connected
 
         Fact._trace.EndTime.CopyFrom(Fact.now())
+
+        # convert timestamp to millis
         key = int(datetime.now().timestamp() * 1000)
+
         Fact._trace.Logs[key] = message
         Fact._trace.Args.extend(args)
+
+        # duration of execution calculation and formatting
         duration = Duration()
         exec_time = Fact._trace.EndTime.seconds - Fact._trace.StartTime.seconds
         duration.FromSeconds(exec_time)
@@ -154,3 +176,8 @@ class Fact:
 
         if "send_on_update" in Fact.config and Fact.config["send_on_update"]:
             Fact.send("done")
+
+    @staticmethod
+    def set_parent_id(parent_id):
+        # function to connect traces with each other using parent_id
+        Fact._trace.ChildOf = parent_id
