@@ -3,7 +3,7 @@ from google.protobuf.timestamp_pb2 import Timestamp
 from google.protobuf.duration_pb2 import Duration
 from enum import Enum
 
-from factclient.provider import AWSFact
+from factclient.provider import AWSFact,GCFFact,ACFFact,OWFact,GenericFact
 from factclient.trace_pb2 import Trace
 import uuid
 import os
@@ -47,25 +47,25 @@ class Fact:
         acf_key = os.getenv("WEBSITE_HOSTNAME")
 
         if aws_key:
-            AWSFact.AWSFact().init(trace, context)
-            Fact._provider = Provider.AWS
+            Fact._provider =  AWSFact.AWSFact()
         elif gcf_key:
-            # TODO impelent GCF provider
-            Fact._provider = Provider.GCF
+            Fact._provider = GCFFact.GCFFact()
         elif acf_key:
-            # TODO impelent ACF provider
-            Fact._provider = Provider.ACF
+            Fact._provider = ACFFact.ACFFact()
         elif ow_key:
-            if os.path.isfile("/sys/hypervisor/uuid"):
-                # TODO impelent ICF provider
-                Fact._provider = Provider.ICF
-            else:
-                # TODO impelent OWk provider
-                Fact._provider = Provider.OWk
+            # if os.path.isfile("/sys/hypervisor/uuid"):
+            #     # TODO impelent ICF provider
+            # else:
+            #     # TODO impelent OWk provider
+            #     #Provider.OWk
+            Fact._provider = OWFact.OWFact()
         # default case provider unknown
         else:
-            Fact._provider = Provider.UND
+            Fact._provider = GenericFact.GenericFact()
+        
+        assert(Fact._provider is not None)   
 
+        Fact._provider.init(trace,context)  
         return
 
     @staticmethod
@@ -131,8 +131,8 @@ class Fact:
             Fact.load(context)
         assert Fact._provider is not None
 
-        if Fact._provider is Provider.AWS:
-            AWSFact.AWSFact().collect(Fact._trace, context)
+       
+        Fact._provider.collect(Fact._trace, context)
 
         if "send_on_update" in Fact.config and Fact.config["send_on_update"]:
             Fact.send("start")
@@ -146,8 +146,7 @@ class Fact:
         Fact._trace.Logs[key] = message
         Fact._trace.Logs.update(tags)
 
-        if Fact._provider is Provider.AWS:
-            AWSFact.AWSFact().collect(Fact._trace, context)
+        Fact._provider.collect(Fact._trace, context)
 
         if "send_on_update" in Fact.config and Fact.config["send_on_update"]:
             Fact.send("update")
@@ -171,11 +170,12 @@ class Fact:
         duration.FromSeconds(exec_time)
         Fact._trace.ExecutionLatency.CopyFrom(duration)
 
-        if Fact._provider is Provider.AWS:
-            AWSFact.AWSFact().collect(Fact._trace, context)
+        Fact._provider.collect(Fact._trace, context)
 
         if "send_on_update" in Fact.config and Fact.config["send_on_update"]:
             Fact.send("done")
+
+        return Fact._trace
 
     @staticmethod
     def set_parent_id(parent_id):

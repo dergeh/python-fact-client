@@ -5,10 +5,12 @@ import factclient.trace_pb2 as trace
 
 from datetime import datetime
 
+from factclient.provider.GenericFact import GenericFact
 
-class AWSFact(object):
+class AWSFact(GenericFact):
 
     def __init__(self, path="/proc/self/cgroup"):
+        super().__init__()
         self.PATH = path
 
     # cost in euro/millisecond
@@ -32,6 +34,8 @@ class AWSFact(object):
             return self.AWS_LAMBDA_COST[3008]
 
     def collect(self, trace: trace.Trace, context):
+        trace = super().collect(trace,context)
+
         if context is None:
             raise Exception
 
@@ -53,6 +57,8 @@ class AWSFact(object):
         # cost estimate
         cost = elat * self.get_closes(context.memory_limit_in_mb)
         trace.Cost = cost
+
+        return trace
 
     FREEZER_OFFSET = len("freezer:/sandbox-")
 
@@ -80,12 +86,14 @@ class AWSFact(object):
                 break
 
     def init(self, trace, context=None):
+        trace = super().init(trace,context)
         log_name = os.environ.get("AWS_LAMBDA_LOG_STREAM_NAME")
         trace.Platform = 'AWS'
         trace.ContainerID = log_name
         trace.Region = os.environ.get("AWS_REGION")
         uptime = Fact.readFile("/proc/uptime").strip()
         trace.Tags["uptime"] = uptime
+
         try:
             self.read_cgroup_ids(trace)
         except Exception:
@@ -96,3 +104,5 @@ class AWSFact(object):
             trace.putTags("freezer", "undefined")
         if context is not None:
             self.collect(trace, context)
+        
+        return trace

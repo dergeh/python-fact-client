@@ -21,3 +21,5 @@ The config object for the client is a python dictionary with the following optio
 ### TCP config
 Port and address for the TCP sender are set through environment variables this needs to be done in the runtime
 environment of the function. Set `fact_tcp_address` and `fact_tcp_port` to your match your log server's. 
+
+### Contribution
